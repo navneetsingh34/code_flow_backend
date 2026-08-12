@@ -25,8 +25,6 @@ const io = new Server(server, {
 const userSocketMap = {};
 const roomLanguageMap = {};
 const roomAdmins = {};
-const roomHardMutes = {};
-const roomCameraLocks = {};
 
 function getAllConnectionsClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
@@ -119,15 +117,6 @@ io.on("connection", (socket) => {
       io.to(socketId).emit(ACTIONS.ROOM_ADMIN, {
         adminSocketId: roomAdmins[roomId]
       });
-
-      // Send current hard mute state to the newly joined user
-      if (roomHardMutes[roomId]) {
-        io.to(socketId).emit(ACTIONS.MUTE_ALL_VIDEO, { isHardMuted: true });
-      }
-      // Send current camera lock state to the newly joined user
-      if (roomCameraLocks[roomId]) {
-        io.to(socketId).emit(ACTIONS.LOCK_ALL_CAMERAS, { isCameraLocked: true });
-      }
     });
 
     // Send the current room language to the newly joined user
@@ -151,65 +140,11 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit(ACTIONS.LANGUAGE_CHANGE, { languageId });
   });
 
-  // --- WebRTC Video Signaling Handlers --- //
-  socket.on(ACTIONS.JOIN_VIDEO, ({ roomId }) => {
-    // Notify others in room
-    const clients = getAllConnectionsClients(roomId);
-    clients.forEach(({ socketId }) => {
-      if (socketId !== socket.id) {
-        io.to(socketId).emit(ACTIONS.VIDEO_USER_JOINED, {
-          socketId: socket.id,
-        });
-      }
-    });
-  });
-
-  socket.on(ACTIONS.VIDEO_OFFER, ({ offer, to }) => {
-    io.to(to).emit(ACTIONS.VIDEO_OFFER, {
-      offer,
-      from: socket.id,
-    });
-  });
-
-  socket.on(ACTIONS.VIDEO_ANSWER, ({ answer, to }) => {
-    io.to(to).emit(ACTIONS.VIDEO_ANSWER, {
-      answer,
-      from: socket.id,
-    });
-  });
-
-  socket.on(ACTIONS.VIDEO_ICE, ({ candidate, to }) => {
-    io.to(to).emit(ACTIONS.VIDEO_ICE, {
-      candidate,
-      from: socket.id,
-    });
-  });
-
-  socket.on(ACTIONS.LEAVE_VIDEO, ({ roomId }) => {
-    socket.in(roomId).emit(ACTIONS.VIDEO_USER_LEFT, {
-      socketId: socket.id,
-    });
-  });
-
   // --- Admin Handling --- //
   socket.on(ACTIONS.LOCK_EDITOR, ({ roomId, isLocked }) => {
     // Only process if sender is the admin
     if (roomAdmins[roomId] === socket.id) {
       socket.in(roomId).emit(ACTIONS.LOCK_EDITOR, { isLocked });
-    }
-  });
-
-  socket.on(ACTIONS.MUTE_ALL_VIDEO, ({ roomId, isHardMuted }) => {
-    if (roomAdmins[roomId] === socket.id) {
-      roomHardMutes[roomId] = isHardMuted;
-      socket.in(roomId).emit(ACTIONS.MUTE_ALL_VIDEO, { isHardMuted });
-    }
-  });
-
-  socket.on(ACTIONS.LOCK_ALL_CAMERAS, ({ roomId, isCameraLocked }) => {
-    if (roomAdmins[roomId] === socket.id) {
-      roomCameraLocks[roomId] = isCameraLocked;
-      socket.in(roomId).emit(ACTIONS.LOCK_ALL_CAMERAS, { isCameraLocked });
     }
   });
 
